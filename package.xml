@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>reactive_assistance</name>
+  <version>0.0.0</version>
+  <description>
+      Provides reactive assistance through the form of shared control.
+  </description>
+
+  <maintainer email="mark.zolotas12@imperial.ac.uk">Mark Zolotas</maintainer>
+
+  <license>MIT</license>
+
+  <author>Mark Zolotas</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  
+  <depend>boost</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>pcl_ros</depend>
+  <depend>roscpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>visualization_msgs</depend>
+
+  <!-- The export tag contains other, unspecified, tags -->
+  <export>
+    <!-- Other tools can request additional information be placed here -->
+
+  </export>
+</package>
