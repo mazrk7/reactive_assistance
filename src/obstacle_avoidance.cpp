@@ -18,6 +18,229 @@
 namespace reactive_assistance 
 {
   //==============================================================================
+  // PUBLIC OBSTACLE AVOIDANCE METHODS
+  //==============================================================================
+  ObstacleAvoidance::ObstacleAvoidance(tf2_ros::Buffer& tf)
+                                        : tf_buffer_(tf),
+                                          robot_profile_(NULL),
+                                          obs_map_(NULL),
+                                          control_thread_(NULL),
+                                          available_goal_(false)
+  {
+    ros::NodeHandle nh;
+    ros::NodeHandle nh_priv("~");
+
+    nh_priv.param<std::string>("base_frame", robot_frame_, std::string("base_link"));
+    nh_priv.param<std::string>("world_frame", world_frame_, std::string("map"));
+
+    double fp_len, fp_wid;
+    nh_priv.param<double>("footprint_length", fp_len, 0.55);
+    nh_priv.param<double>("footprint_width", fp_wid, 0.4);
+
+    // Creating robot footprint as a vector of points forming a polygon shape
+    std::vector<geometry_msgs::Point> footprint;
+    geometry_msgs::Point bleft;
+    bleft.x = -fp_len;
+    bleft.y = -fp_wid;
+    footprint.push_back(bleft);
+
+    geometry_msgs::Point bright;
+    bright.x = -fp_len;
+    bright.y = fp_wid;
+    footprint.push_back(bright);
+     
+    geometry_msgs::Point tright;
+    tright.x = fp_len;
+    tright.y = fp_wid;
+    footprint.push_back(tright);
+      
+    geometry_msgs::Point tleft;
+    tleft.x = fp_len;
+    tleft.y = -fp_wid;
+    footprint.push_back(tleft);
+
+    // Virtual circle radius (make it half width of robot)
+    double radius = fp_wid;
+    // Rectangular robot so set min gap width to rectangular robot width
+    double min_gap_width = 2.0*fp_wid;
+    // Limit safety speed distance to 0.9m
+    double dvel_safe;
+    nh_priv.param<double>("dvel_safe", dvel_safe, 0.9);
+
+    double max_vx, max_vth, acc_x, acc_th;
+    nh_priv.param<double>("max_lin_vel", max_vx, 1.0);
+    nh_priv.param<double>("max_ang_vel", max_vth, 1.0);
+    nh_priv.param<double>("acc_vx_lim", acc_x, 1.0);
+    nh_priv.param<double>("acc_vth_lim", acc_th, 1.0);
+  
+    robot_profile_ = new RobotProfile(footprint, radius, dvel_safe, min_gap_width, max_vx, max_vth, acc_x, acc_th);    
+    ROS_INFO_STREAM("Loaded the robot profile...");
+
+    obs_map_ = new ObstacleMap(tf_buffer_, *robot_profile_);    
+    ROS_INFO_STREAM("Loaded the obstacle map...");
+
+    nh_priv.param<double>("sim_time", sim_time_, 1.0);
+    nh_priv.param<double>("sim_granularity", sim_granularity_, 0.1);
+
+    double control_rate;
+    nh_priv.param<double>("control_rate", control_rate, 20);
+    // Set up the autonomous control thread
+    control_thread_ = new boost::thread(boost::bind(&ObstacleAvoidance::navigationLoop, this, control_rate));
+
+    // Publishers & Subscribers
+    std::string safe_cmd_pub_topic, auto_cmd_pub_topic, traj_pub_topic, obs_pub_topic, footprint_pub_topic, global_goal_pub_topic;
+    nh_priv.param<std::string>("safe_cmd_pub_topic", safe_cmd_pub_topic, std::string("cmd_vel"));
+    nh_priv.param<std::string>("auto_cmd_pub_topic", auto_cmd_pub_topic, std::string("auto_vel"));
+    nh_priv.param<std::string>("traj_pub_topic", traj_pub_topic, std::string("desired_traj"));
+    nh_priv.param<std::string>("obs_pub_topic", obs_pub_topic, std::string("collision_obstacles"));
+    nh_priv.param<std::string>("footprint_pub_topic", footprint_pub_topic, std::string("footprint"));
+    nh_priv.param<std::string>("global_goal_pub_topic", global_goal_pub_topic, std::string("global_goal"));
+
+    safe_cmd_pub_ = nh.advertise<geometry_msgs::Twist>(safe_cmd_pub_topic, 10); 
+    auto_cmd_pub_ = nh.advertise<geometry_msgs::Twist>(auto_cmd_pub_topic, 10); 
+
+    // Below publishers are for debugging/visualisation purposes
+    traj_pub_ = nh.advertise<geometry_msgs::PoseArray>(traj_pub_topic, 10); 
+    obs_pub_ = nh.advertise<PointCloud>(obs_pub_topic, 10); 
+    footprint_pub_ = nh.advertise<visualization_msgs::Marker>(footprint_pub_topic, 10); 
+    global_goal_pub_ = nh.advertise<geometry_msgs::PoseStamped>(global_goal_pub_topic, 10); 
+
+    std::string odom_sub_topic, goal_sub_topic, cmd_sub_topic;
+    nh_priv.param<std::string>("odom_sub_topic", odom_sub_topic, std::string("odom"));
+    nh_priv.param<std::string>("goal_sub_topic", goal_sub_topic, std::string("goal"));
+    nh_priv.param<std::string>("cmd_sub_topic", cmd_sub_topic, std::string("main_js_cmd_vel"));
+    
+    odom_sub_ = nh.subscribe<nav_msgs::Odometry>(odom_sub_topic.c_str(), 1, &ObstacleAvoidance::odomCallback, this);   
+    goal_sub_ = nh.subscribe<geometry_msgs::PoseStamped>(goal_sub_topic.c_str(), 1, &ObstacleAvoidance::goalCallback, this);   
+    cmd_sub_ = nh.subscribe<geometry_msgs::Twist>(cmd_sub_topic.c_str(), 1, &ObstacleAvoidance::cmdCallback, this);    
+
+    ROS_INFO_STREAM("Loaded the obstacle avoidance...");
+  }
+
+  ObstacleAvoidance::~ObstacleAvoidance()
+  {
+    if (robot_profile_ != NULL)
+      delete robot_profile_;
+
+    if (obs_map_ != NULL)
+      delete obs_map_;
+
+    if (control_thread_ != NULL)
+    {
+      control_thread_->join();
+      delete control_thread_;
+    }
+  }
+
+  void ObstacleAvoidance::odomCallback(const nav_msgs::Odometry::ConstPtr& odom)
+  { 
+    boost::mutex::scoped_lock lock(odom_mutex_);
+    curr_odom_ = *odom;
+
+    // Check if goal point has not been reached yet if one is available
+    if (available_goal_ && (dist(goal_pose_.pose.position, curr_odom_.pose.pose.position) < robot_profile_->radius))
+    {
+      ROS_INFO("Reached the published goal pose!");
+      available_goal_ = false;
+    }
+
+    // Create footprint polygon visualisation as a list of lines    
+    visualization_msgs::Marker line_list;
+    line_list.type = visualization_msgs::Marker::LINE_LIST;
+    line_list.header.stamp = ros::Time::now(); 
+    line_list.header.frame_id = world_frame_;
+    line_list.action = visualization_msgs::Marker::ADD;
+    line_list.pose = curr_odom_.pose.pose; // Match the robot frame
+    line_list.scale.x = 0.05;
+
+    // Coloured green like the trajectory
+    line_list.color.g = 1.0;
+    line_list.color.a = 1.0;
+    
+    int fp_length = robot_profile_->footprint.size();
+    // Loop over each edge of robot polygon shape
+    for (int i = 0; i < fp_length; ++i) 
+    {
+      int next = (i+1) % fp_length;
+      line_list.points.push_back(robot_profile_->footprint[i]);
+      line_list.points.push_back(robot_profile_->footprint[next]);
+    }
+
+    footprint_pub_.publish(line_list);
+  }
+
+  void ObstacleAvoidance::goalCallback(const geometry_msgs::PoseStamped::ConstPtr& goal)
+  { 
+    goal_pose_ = *goal;
+    available_goal_ = true;
+
+    global_goal_pub_.publish(goal_pose_);
+    ROS_INFO("Goal pose updated!");
+  }
+  
+  void ObstacleAvoidance::cmdCallback(const geometry_msgs::Twist::ConstPtr& twist)
+  { 
+    const geometry_msgs::Twist& orig = *twist; 
+
+    // Goal trajectory to pursue
+    TrajPtr goal_traj;
+    // Get simulated goal trajectory if one hasn't been specified by a 'global' source
+    if (available_goal_)
+      goal_traj = getGlobalTrajectory();
+    else
+      goal_traj = simulateTrajectory(orig);
+
+    // Assistive command
+    geometry_msgs::Twist assist;
+    // Colliding obstacles vector
+    std::vector<Obstacle> obstacles;
+
+    // Handle different drive scenarios: 
+    // a) Joystick deadzone or error in transform
+    if ((std::abs(orig.linear.x) < 0.1 && std::abs(orig.angular.z) < 0.1) || (goal_traj == NULL))
+    {
+      assist.linear.x = 0.0;
+      assist.angular.z = 0.0;
+    }
+    // b) Free-path to goal situation
+    else if (obs_map_->isNavigable(*goal_traj, obs_map_->getObstacles(), obstacles))
+    {
+      assist = orig;
+    }
+    // c) Dangerous-path to goal situation
+    else
+    {
+      PointCloudPtr cloud (new PointCloud);
+      cloud->header.frame_id = robot_frame_;
+
+      for (std::vector<Obstacle>::const_iterator it = obstacles.begin(); it != obstacles.end(); ++it)
+        cloud->points.push_back(pcl::PointXYZ(it->point.x, it->point.y, 0.0));
+
+      // Publish the colliding obstacles
+      obs_pub_.publish(cloud);
+
+      // Find the assistive command 
+      findAssistiveCommand(*goal_traj, assist);
+
+      // Check if you can just run original commands
+      if (available_goal_ && almostEqual(assist.linear.x, 0.0) && almostEqual(assist.angular.z, 0.0))
+      {
+        std::vector<Obstacle> orig_obstacles;
+        TrajPtr sim_traj = simulateTrajectory(orig);
+        
+        if (obs_map_->isNavigable(*sim_traj, obs_map_->getObstacles(), orig_obstacles))
+          assist = orig;
+      }
+      
+      ROS_INFO_STREAM("Original: Lin " << orig.linear.x << " Ang " << orig.angular.z);
+      ROS_INFO_STREAM("Assisted: Lin " << assist.linear.x << " Ang " << assist.angular.z);
+    }
+      
+    // Publish the safe navigational command
+     safe_cmd_pub_.publish(assist);
+  }
+
+  //==============================================================================
   // PRIVATE OBSTACLE AVOIDANCE METHODS (Utilities)
   //============================================================================== 
   // Compute motion commands to navigate a safe trajectory
@@ -266,229 +489,5 @@ namespace reactive_assistance
         auto_cmd_pub_.publish(assist);
       }
     }
-  }
-
-  //==============================================================================
-  // PUBLIC OBSTACLE AVOIDANCE METHODS
-  //==============================================================================
-  ObstacleAvoidance::ObstacleAvoidance(tf2_ros::Buffer& tf)
-                                        : tf_buffer_(tf),
-                                          robot_profile_(NULL),
-                                          obs_map_(NULL),
-                                          control_thread_(NULL),
-                                          available_goal_(false)
-  {
-
-    ros::NodeHandle nh;
-    ros::NodeHandle nh_priv("~");
-
-    nh_priv.param<std::string>("base_frame", robot_frame_, std::string("base_link"));
-    nh_priv.param<std::string>("world_frame", world_frame_, std::string("map"));
-
-    double fp_len, fp_wid;
-    nh_priv.param<double>("footprint_length", fp_len, 0.55);
-    nh_priv.param<double>("footprint_width", fp_wid, 0.4);
-
-    // Creating robot footprint as a vector of points forming a polygon shape
-    std::vector<geometry_msgs::Point> footprint;
-    geometry_msgs::Point bleft;
-    bleft.x = -fp_len;
-    bleft.y = -fp_wid;
-    footprint.push_back(bleft);
-
-    geometry_msgs::Point bright;
-    bright.x = -fp_len;
-    bright.y = fp_wid;
-    footprint.push_back(bright);
-     
-    geometry_msgs::Point tright;
-    tright.x = fp_len;
-    tright.y = fp_wid;
-    footprint.push_back(tright);
-      
-    geometry_msgs::Point tleft;
-    tleft.x = fp_len;
-    tleft.y = -fp_wid;
-    footprint.push_back(tleft);
-
-    // Virtual circle radius (make it half width of robot)
-    double radius = fp_wid;
-    // Rectangular robot so set min gap width to rectangular robot width
-    double min_gap_width = 2.0*fp_wid;
-    // Limit safety speed distance to 0.9m
-    double dvel_safe;
-    nh_priv.param<double>("dvel_safe", dvel_safe, 0.9);
-
-    double max_vx, max_vth, acc_x, acc_th;
-    nh_priv.param<double>("max_lin_vel", max_vx, 1.0);
-    nh_priv.param<double>("max_ang_vel", max_vth, 1.0);
-    nh_priv.param<double>("acc_vx_lim", acc_x, 1.0);
-    nh_priv.param<double>("acc_vth_lim", acc_th, 1.0);
-  
-    robot_profile_ = new RobotProfile(footprint, radius, dvel_safe, min_gap_width, max_vx, max_vth, acc_x, acc_th);    
-    ROS_INFO_STREAM("Loaded the robot profile...");
-
-    obs_map_ = new ObstacleMap(tf_buffer_, *robot_profile_);    
-    ROS_INFO_STREAM("Loaded the obstacle map...");
-
-    nh_priv.param<double>("sim_time", sim_time_, 1.0);
-    nh_priv.param<double>("sim_granularity", sim_granularity_, 0.1);
-
-    double control_rate;
-    nh_priv.param<double>("control_rate", control_rate, 20);
-    // Set up the autonomous control thread
-    control_thread_ = new boost::thread(boost::bind(&ObstacleAvoidance::navigationLoop, this, control_rate));
-
-    // Publishers & Subscribers
-    std::string safe_cmd_pub_topic, auto_cmd_pub_topic, traj_pub_topic, obs_pub_topic, footprint_pub_topic, global_goal_pub_topic;
-    nh_priv.param<std::string>("safe_cmd_pub_topic", safe_cmd_pub_topic, std::string("cmd_vel"));
-    nh_priv.param<std::string>("auto_cmd_pub_topic", auto_cmd_pub_topic, std::string("auto_vel"));
-    nh_priv.param<std::string>("traj_pub_topic", traj_pub_topic, std::string("desired_traj"));
-    nh_priv.param<std::string>("obs_pub_topic", obs_pub_topic, std::string("collision_obstacles"));
-    nh_priv.param<std::string>("footprint_pub_topic", footprint_pub_topic, std::string("footprint"));
-    nh_priv.param<std::string>("global_goal_pub_topic", global_goal_pub_topic, std::string("global_goal"));
-
-    safe_cmd_pub_ = nh.advertise<geometry_msgs::Twist>(safe_cmd_pub_topic, 10); 
-    auto_cmd_pub_ = nh.advertise<geometry_msgs::Twist>(auto_cmd_pub_topic, 10); 
-
-    // Below publishers are for debugging/visualisation purposes
-    traj_pub_ = nh.advertise<geometry_msgs::PoseArray>(traj_pub_topic, 10); 
-    obs_pub_ = nh.advertise<PointCloud>(obs_pub_topic, 10); 
-    footprint_pub_ = nh.advertise<visualization_msgs::Marker>(footprint_pub_topic, 10); 
-    global_goal_pub_ = nh.advertise<geometry_msgs::PoseStamped>(global_goal_pub_topic, 10); 
-
-    std::string odom_sub_topic, goal_sub_topic, cmd_sub_topic;
-    nh_priv.param<std::string>("odom_sub_topic", odom_sub_topic, std::string("odom"));
-    nh_priv.param<std::string>("goal_sub_topic", goal_sub_topic, std::string("goal"));
-    nh_priv.param<std::string>("cmd_sub_topic", cmd_sub_topic, std::string("main_js_cmd_vel"));
-    
-    odom_sub_ = nh.subscribe<nav_msgs::Odometry>(odom_sub_topic.c_str(), 1, &ObstacleAvoidance::odomCallback, this);   
-    goal_sub_ = nh.subscribe<geometry_msgs::PoseStamped>(goal_sub_topic.c_str(), 1, &ObstacleAvoidance::goalCallback, this);   
-    cmd_sub_ = nh.subscribe<geometry_msgs::Twist>(cmd_sub_topic.c_str(), 1, &ObstacleAvoidance::cmdCallback, this);    
-
-    ROS_INFO_STREAM("Loaded the obstacle avoidance...");
-  }
-
-  ObstacleAvoidance::~ObstacleAvoidance()
-  {
-    if (robot_profile_ != NULL)
-      delete robot_profile_;
-
-    if (obs_map_ != NULL)
-      delete obs_map_;
-
-    if (control_thread_ != NULL)
-    {
-      control_thread_->join();
-      delete control_thread_;
-    }
-  }
-
-  void ObstacleAvoidance::odomCallback(const nav_msgs::Odometry::ConstPtr& odom)
-  { 
-    boost::mutex::scoped_lock lock(odom_mutex_);
-    curr_odom_ = *odom;
-
-    // Check if goal point has not been reached yet if one is available
-    if (available_goal_ && (dist(goal_pose_.pose.position, curr_odom_.pose.pose.position) < robot_profile_->radius))
-    {
-      ROS_INFO("Reached the published goal pose!");
-      available_goal_ = false;
-    }
-
-    // Create footprint polygon visualisation as a list of lines    
-    visualization_msgs::Marker line_list;
-    line_list.type = visualization_msgs::Marker::LINE_LIST;
-    line_list.header.stamp = ros::Time::now(); 
-    line_list.header.frame_id = world_frame_;
-    line_list.action = visualization_msgs::Marker::ADD;
-    line_list.pose = curr_odom_.pose.pose; // Match the robot frame
-    line_list.scale.x = 0.05;
-
-    // Coloured green like the trajectory
-    line_list.color.g = 1.0;
-    line_list.color.a = 1.0;
-    
-    int fp_length = robot_profile_->footprint.size();
-    // Loop over each edge of robot polygon shape
-    for (int i = 0; i < fp_length; ++i) 
-    {
-      int next = (i+1) % fp_length;
-      line_list.points.push_back(robot_profile_->footprint[i]);
-      line_list.points.push_back(robot_profile_->footprint[next]);
-    }
-
-    footprint_pub_.publish(line_list);
-  }
-
-  void ObstacleAvoidance::goalCallback(const geometry_msgs::PoseStamped::ConstPtr& goal)
-  { 
-    goal_pose_ = *goal;
-    available_goal_ = true;
-
-    global_goal_pub_.publish(goal_pose_);
-    ROS_INFO("Goal pose updated!");
-  }
-  
-  void ObstacleAvoidance::cmdCallback(const geometry_msgs::Twist::ConstPtr& twist)
-  { 
-    const geometry_msgs::Twist& orig = *twist; 
-
-    // Goal trajectory to pursue
-    TrajPtr goal_traj;
-    // Get simulated goal trajectory if one hasn't been specified by a 'global' source
-    if (available_goal_)
-      goal_traj = getGlobalTrajectory();
-    else
-      goal_traj = simulateTrajectory(orig);
-
-    // Assistive command
-    geometry_msgs::Twist assist;
-    // Colliding obstacles vector
-    std::vector<Obstacle> obstacles;
-
-    // Handle different drive scenarios: 
-    // a) Joystick deadzone or error in transform
-    if ((std::abs(orig.linear.x) < 0.1 && std::abs(orig.angular.z) < 0.1) || (goal_traj == NULL))
-    {
-      assist.linear.x = 0.0;
-      assist.angular.z = 0.0;
-    }
-    // b) Free-path to goal situation
-    else if (obs_map_->isNavigable(*goal_traj, obs_map_->getObstacles(), obstacles))
-    {
-      assist = orig;
-    }
-    // c) Dangerous-path to goal situation
-    else
-    {
-      PointCloudPtr cloud (new PointCloud);
-      cloud->header.frame_id = robot_frame_;
-
-      for (std::vector<Obstacle>::const_iterator it = obstacles.begin(); it != obstacles.end(); ++it)
-        cloud->points.push_back(pcl::PointXYZ(it->point.x, it->point.y, 0.0));
-
-      // Publish the colliding obstacles
-      obs_pub_.publish(cloud);
-
-      // Find the assistive command 
-      findAssistiveCommand(*goal_traj, assist);
-
-      // Check if you can just run original commands
-      if (available_goal_ && almostEqual(assist.linear.x, 0.0) && almostEqual(assist.angular.z, 0.0))
-      {
-        std::vector<Obstacle> orig_obstacles;
-        TrajPtr sim_traj = simulateTrajectory(orig);
-        
-        if (obs_map_->isNavigable(*sim_traj, obs_map_->getObstacles(), orig_obstacles))
-          assist = orig;
-      }
-      
-      ROS_INFO_STREAM("Original: Lin " << orig.linear.x << " Ang " << orig.angular.z);
-      ROS_INFO_STREAM("Assisted: Lin " << assist.linear.x << " Ang " << assist.angular.z);
-    }
-      
-    // Publish the safe navigational command
-     safe_cmd_pub_.publish(assist);
   }
 } /* namespace reactive_assistance */
