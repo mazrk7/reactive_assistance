@@ -83,7 +83,7 @@ namespace reactive_assistance
     nh_priv.param<double>("sim_granularity", sim_granularity_, 0.1);
 
     double control_rate;
-    nh_priv.param<double>("control_rate", control_rate, 20);
+    nh_priv.param<double>("control_rate", control_rate, 10);
     // Set up the autonomous control thread
     control_thread_ = new boost::thread(boost::bind(&ObstacleAvoidance::navigationLoop, this, control_rate));
 
@@ -136,13 +136,6 @@ namespace reactive_assistance
   { 
     boost::mutex::scoped_lock lock(odom_mutex_);
     curr_odom_ = *odom;
-
-    // Check if goal point has not been reached yet if one is available
-    if (available_goal_ && (dist(goal_pose_.pose.position, curr_odom_.pose.pose.position) < robot_profile_->radius))
-    {
-      ROS_INFO("Reached the published goal pose!");
-      available_goal_ = false;
-    }
 
     // Create footprint polygon visualisation as a list of lines    
     visualization_msgs::Marker line_list;
@@ -232,8 +225,7 @@ namespace reactive_assistance
           assist = orig;
       }
       
-      ROS_INFO_STREAM("Original: Lin " << orig.linear.x << " Ang " << orig.angular.z);
-      ROS_INFO_STREAM("Assisted: Lin " << assist.linear.x << " Ang " << assist.angular.z);
+
     }
       
     // Publish the safe navigational command
@@ -449,12 +441,24 @@ namespace reactive_assistance
     return TrajPtr(new Trajectory(goal_stamped.pose.position));
   }
 
-  void ObstacleAvoidance::navigationLoop(double rate) const
+  void ObstacleAvoidance::navigationLoop(double rate)
   { 
     ros::NodeHandle nh;
     ros::Rate r(rate);
     while (nh.ok())
     {
+      // Check if a goal point is available and the position has not been reached yet
+      if (available_goal_ && (dist(goal_pose_.pose.position, curr_odom_.pose.pose.position) < robot_profile_->radius))
+      {
+        ROS_INFO("Reached the published goal pose!");
+        available_goal_ = false;
+
+        // Publish a terminating velocity command
+        geometry_msgs::Twist zero_twist;
+        zero_twist.linear.x = zero_twist.angular.z = 0.0;
+        auto_cmd_pub_.publish(zero_twist);
+      }
+
       if (available_goal_)
       {
         // Goal trajectory to pursue
@@ -474,7 +478,9 @@ namespace reactive_assistance
           cloud->header.frame_id = robot_frame_;
 
           for (std::vector<Obstacle>::const_iterator it = obstacles.begin(); it != obstacles.end(); ++it)
+          {
             cloud->points.push_back(pcl::PointXYZ(it->point.x, it->point.y, 0.0));
+          }
 
           // Publish the colliding obstacles
           obs_pub_.publish(cloud);
@@ -483,9 +489,8 @@ namespace reactive_assistance
           findAssistiveCommand(*goal_traj, assist);
         }
         
+        // Publish the autonomous navigation command if a goal is still available
         ROS_INFO_STREAM("Autonomous: Lin " << assist.linear.x << " Ang " << assist.angular.z);
-
-        // Publish the safe navigational command
         auto_cmd_pub_.publish(assist);
       }
     }

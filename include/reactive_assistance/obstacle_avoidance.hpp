@@ -42,7 +42,7 @@ namespace reactive_assistance
         // Return goal point of simulated trajectory
         TrajPtr simulateTrajectory(const geometry_msgs::Twist& twist_msg) const; 
         // Navigate towards a global goal
-        void navigationLoop(double rate) const;
+        void navigationLoop(double rate);
 
         tf2_ros::Buffer& tf_buffer_;
 
