@@ -28,7 +28,7 @@ namespace reactive_assistance
     nh_priv.param<std::string>("base_frame", robot_frame_, std::string("base_link"));
 
     std::string laser_sub_topic;
-    nh_priv.param<std::string>("laser_sub_topic", laser_sub_topic, std::string("base_scan"));
+    nh_priv.param<std::string>("laser_sub_topic", laser_sub_topic, std::string("scan"));
     laser_sub_ = nh.subscribe<sensor_msgs::LaserScan>(laser_sub_topic.c_str(), 1, &ObstacleMap::scanCallback, this);
 
     // Topics and publishers for gap visualisation

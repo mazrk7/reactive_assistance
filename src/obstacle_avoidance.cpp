@@ -108,7 +108,7 @@ namespace reactive_assistance
     std::string odom_sub_topic, goal_sub_topic, cmd_sub_topic;
     nh_priv.param<std::string>("odom_sub_topic", odom_sub_topic, std::string("odom"));
     nh_priv.param<std::string>("goal_sub_topic", goal_sub_topic, std::string("goal"));
-    nh_priv.param<std::string>("cmd_sub_topic", cmd_sub_topic, std::string("main_js_cmd_vel"));
+    nh_priv.param<std::string>("cmd_sub_topic", cmd_sub_topic, std::string("input_vel"));
     
     odom_sub_ = nh.subscribe<nav_msgs::Odometry>(odom_sub_topic.c_str(), 1, &ObstacleAvoidance::odomCallback, this);   
     goal_sub_ = nh.subscribe<geometry_msgs::PoseStamped>(goal_sub_topic.c_str(), 1, &ObstacleAvoidance::goalCallback, this);   
