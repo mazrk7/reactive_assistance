@@ -10,26 +10,30 @@
 
 namespace reactive_assistance 
 {
+  // Represents a gap for the mobile robot to pass through
   class Gap
   { 
     public:
       Gap(const Obstacle& r, const Obstacle& l, bool cr=true) 
-            : right(r), left(l), 
-              mid(computeMid()), 
-              width(computeWidth()), 
-              front(isFront()), 
-              close_right(cr) 
-              {}
+         : right(r)
+         , left(l)
+         , mid(computeMid())
+         , width(computeWidth())
+         , front(isFront())
+         , close_right(cr) 
+      {}
       ~Gap() {}
       
+      // Composed of a right and left obstacle
       Obstacle right;
       Obstacle left;
-
+      // Mid-point of the gap
       geometry_msgs::Point mid;
-
+      // Width of the gap
       double width;
-
+      // Flag to determine whether the gap is front-facing the robot
       bool front;
+      // Flag to indicate if the right side is closer to the base
       bool close_right;
 
     private:
@@ -39,8 +43,8 @@ namespace reactive_assistance
       { 
         geometry_msgs::Point p;
 
-        p.x = (right.point.x + left.point.x)/2.0;
-        p.y = (right.point.y + left.point.y)/2.0;
+        p.x = (right.point.x + left.point.x) / 2.0;
+        p.y = (right.point.y + left.point.y) / 2.0;
         p.z = 0.0;
 
         return p;

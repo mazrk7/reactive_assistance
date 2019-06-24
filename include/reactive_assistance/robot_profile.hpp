@@ -7,17 +7,22 @@
 
 namespace reactive_assistance 
 {
+  // Represents the geometric and kinematic profile of the mobile robot
   class RobotProfile
   {
     public:
-      RobotProfile(const std::vector<geometry_msgs::Point>& fp, double r, double dvs, double min_g, double vx, double vth, double acc_x, double acc_th)
-                    : footprint(fp), 
-                      radius(r), 
-                      d_safe(2*r), dvel_safe(dvs),
-                      min_gap_width(min_g), 
-                      max_vx(vx), max_vth(vth),
-                      acc_vx_lim(acc_x), acc_vth_lim(acc_th) 
-                      {}  
+      RobotProfile(const std::vector<geometry_msgs::Point>& fp, double r, double dvs, 
+                  double min_g, double vx, double vth, double acc_x, double acc_th)
+                  : footprint(fp)
+                  , radius(r)
+                  , d_safe(2*r)
+                  , dvel_safe(dvs)
+                  , min_gap_width(min_g)
+                  , max_vx(vx)
+                  , max_vth(vth)
+                  , acc_vx_lim(acc_x)
+                  , acc_vth_lim(acc_th)
+      {}  
       ~RobotProfile() {}
 
       // Shape of robot approximated by a polygon
