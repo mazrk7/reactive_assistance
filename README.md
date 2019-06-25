@@ -8,4 +8,9 @@ The package currently offers two use-cases for differential-drive rectangular mo
 
 See an example of how to configure this package for use in the `example.launch` file.
 
-This is a project regularly undergoing development and any contributions/feedback will be well-received. There is also a presentation in the `docs` directory for higher-level understanding of how this package operates. 
+Some additional constraints/considerations before using this package:
+- It only operates on rectangular mobile bases, other geometric robot shapes have not yet been handled
+- No tests have been made in the gap detection routines for laser scans _without_ a full field-of-view
+- It's assumed that the laser data has been filtered already to _not_ contain range values within the robot's footprint
+
+This is a project regularly undergoing development and any contributions/feedback will be well-received. There is also a presentation in the `docs` directory for higher-level understanding of how this package operates.
