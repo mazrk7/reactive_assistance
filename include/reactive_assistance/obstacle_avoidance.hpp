@@ -21,66 +21,70 @@
 
 namespace reactive_assistance 
 {
-    class ObstacleAvoidance 
-    {
-      public:
-        // Constructor & destructor
-        ObstacleAvoidance(tf2_ros::Buffer& tf);
-        ~ObstacleAvoidance();
+  // Represents the obstacle avoidance algorithm that generates safe navigation commands
+  class ObstacleAvoidance 
+  {
+    public:
+      // Constructor & destructor
+      ObstacleAvoidance(tf2_ros::Buffer& tf);
+      ~ObstacleAvoidance();
 
-        void odomCallback(const nav_msgs::Odometry::ConstPtr& odom);
-        void goalCallback(const geometry_msgs::PoseStamped::ConstPtr& goal);
-        void cmdCallback(const geometry_msgs::Twist::ConstPtr& twist);  
+      void odomCallback(const nav_msgs::Odometry::ConstPtr& odom);
+      void goalCallback(const geometry_msgs::PoseStamped::ConstPtr& goal);
+      void cmdCallback(const geometry_msgs::Twist::ConstPtr& twist);  
 
-      private:
-        // Compute motion command to navigate a safe trajectory
-        void computeMotionCommand(const Trajectory& safe_traj, geometry_msgs::Twist& assist) const;
-        // Find assistive command for the simulated trajectory 'traj'
-        void findAssistiveCommand(const Trajectory& traj, geometry_msgs::Twist& assist) const;
-        // Return goal point specified by a 'global' planner
-        TrajPtr getGlobalTrajectory() const; 
-        // Return goal point of simulated trajectory
-        TrajPtr simulateTrajectory(const geometry_msgs::Twist& twist_msg) const; 
-        // Navigate towards a global goal
-        void navigationLoop(double rate);
+    private:
+      // Compute motion command to navigate a safe trajectory
+      void computeMotionCommand(const Trajectory& safe_traj, geometry_msgs::Twist& assist) const;
+      // Find assistive command for the simulated trajectory 'traj'
+      void findAssistiveCommand(const Trajectory& traj, geometry_msgs::Twist& assist) const;
+      // Return goal point specified by a 'global' planner
+      TrajPtr getGlobalTrajectory() const; 
+      // Return goal point of simulated trajectory
+      TrajPtr simulateTrajectory(const geometry_msgs::Twist& twist_msg) const; 
+      // Checks to see if the robot has reached the global goal yet
+      bool isGoalReached() const;
+      // Navigate towards a global goal
+      void navigationLoop(double rate);
 
-        tf2_ros::Buffer& tf_buffer_;
+      tf2_ros::Buffer& tf_buffer_;
 
-        // Robot footprint and kinematic constraints
-        RobotProfile* robot_profile_;
-        // Obstacle map where gaps are computed and navigation functions are performed
-        ObstacleMap* obs_map_;
+      // Robot footprint and kinematic constraints
+      RobotProfile* robot_profile_;
+      // Obstacle map where gaps are computed and navigation functions are performed
+      ObstacleMap* obs_map_;
 
-        // Robot base frame and global frame
-        std::string robot_frame_;
-        std::string world_frame_;
+      // TF frames
+      std::string robot_frame_;
+      std::string odom_frame_;
+      std::string world_frame_;
 
-        // Simulation time and discretisation
-        double sim_time_;
-        double sim_granularity_;
+      // Simulation time and discretisation
+      double sim_time_;
+      double sim_granularity_;
 
-        // Obstacle avoidance  control loop thread
-        boost::thread* control_thread_;
+      // Obstacle avoidance  control loop thread
+      boost::thread* control_thread_;
 
-        // Odom and mutex objects
-        boost::mutex odom_mutex_;
-        nav_msgs::Odometry curr_odom_;
+      // Odom and mutex objects
+      boost::mutex odom_mutex_;
+      nav_msgs::Odometry curr_odom_;
 
-        // Global goal pose and flag to confirm availability
-        bool available_goal_;
-        geometry_msgs::PoseStamped goal_pose_;
+      // Global goal pose and flag to confirm availability
+      bool available_goal_;
+      geometry_msgs::PoseStamped curr_goal_;
 
-        // Publishers & subscribers
-        ros::Publisher safe_cmd_pub_;
-        ros::Publisher auto_cmd_pub_;
-        ros::Publisher traj_pub_;
-        ros::Publisher obs_pub_;
-        ros::Publisher footprint_pub_;
-        ros::Publisher global_goal_pub_;
+      // Publishers & subscribers
+      ros::Publisher safe_cmd_pub_;
+      ros::Publisher auto_cmd_pub_;
+      ros::Publisher traj_pub_;
+      ros::Publisher obs_pub_;
+      ros::Publisher footprint_pub_;
+      ros::Publisher goal_pub_;
 
-        ros::Subscriber odom_sub_;
-        ros::Subscriber goal_sub_;
-        ros::Subscriber cmd_sub_;
+      ros::Subscriber odom_sub_;
+      ros::Subscriber goal_sub_;
+      ros::Subscriber cmd_sub_;
   };
 } /* namespace reactive_assistance */
            

@@ -46,11 +46,17 @@ namespace reactive_assistance
   inline double sat(double x, double lower, double upper)
   {
     if (x <= lower) 
+    {
       return lower;
+    }
     else if (x >= upper) 
+    {
       return upper;
+    }
     else
+    {
       return x;
+    }
   }
 
   // Sign function, returns 1 if x > 0.0, -1 if x < 0.0, and 0 otherwise

@@ -12,25 +12,24 @@
 // All the other necessary headers included in the class declaration files
 #include <reactive_assistance/obstacle_avoidance.hpp>
 
-//==============================================================================
-// OBSTACLE AVOIDANCE DEFINITIONS
-//==============================================================================
 namespace reactive_assistance 
 {
   //==============================================================================
   // PUBLIC OBSTACLE AVOIDANCE METHODS
   //==============================================================================
+
   ObstacleAvoidance::ObstacleAvoidance(tf2_ros::Buffer& tf)
-                                        : tf_buffer_(tf),
-                                          robot_profile_(NULL),
-                                          obs_map_(NULL),
-                                          control_thread_(NULL),
-                                          available_goal_(false)
+                                      : tf_buffer_(tf)
+                                      , robot_profile_(NULL)
+                                      , obs_map_(NULL)
+                                      , control_thread_(NULL)
+                                      , available_goal_(false)
   {
     ros::NodeHandle nh;
     ros::NodeHandle nh_priv("~");
 
     nh_priv.param<std::string>("base_frame", robot_frame_, std::string("base_link"));
+    nh_priv.param<std::string>("odom_frame", odom_frame_, std::string("odom"));
     nh_priv.param<std::string>("world_frame", world_frame_, std::string("map"));
 
     double fp_len, fp_wid;
@@ -88,13 +87,13 @@ namespace reactive_assistance
     control_thread_ = new boost::thread(boost::bind(&ObstacleAvoidance::navigationLoop, this, control_rate));
 
     // Publishers & Subscribers
-    std::string safe_cmd_pub_topic, auto_cmd_pub_topic, traj_pub_topic, obs_pub_topic, footprint_pub_topic, global_goal_pub_topic;
+    std::string safe_cmd_pub_topic, auto_cmd_pub_topic, traj_pub_topic, obs_pub_topic, footprint_pub_topic, goal_pub_topic;
     nh_priv.param<std::string>("safe_cmd_pub_topic", safe_cmd_pub_topic, std::string("cmd_vel"));
     nh_priv.param<std::string>("auto_cmd_pub_topic", auto_cmd_pub_topic, std::string("auto_vel"));
     nh_priv.param<std::string>("traj_pub_topic", traj_pub_topic, std::string("desired_traj"));
     nh_priv.param<std::string>("obs_pub_topic", obs_pub_topic, std::string("collision_obstacles"));
     nh_priv.param<std::string>("footprint_pub_topic", footprint_pub_topic, std::string("footprint"));
-    nh_priv.param<std::string>("global_goal_pub_topic", global_goal_pub_topic, std::string("global_goal"));
+    nh_priv.param<std::string>("goal_pub_topic", goal_pub_topic, std::string("nav_goal"));
 
     safe_cmd_pub_ = nh.advertise<geometry_msgs::Twist>(safe_cmd_pub_topic, 10); 
     auto_cmd_pub_ = nh.advertise<geometry_msgs::Twist>(auto_cmd_pub_topic, 10); 
@@ -103,7 +102,7 @@ namespace reactive_assistance
     traj_pub_ = nh.advertise<geometry_msgs::PoseArray>(traj_pub_topic, 10); 
     obs_pub_ = nh.advertise<PointCloud>(obs_pub_topic, 10); 
     footprint_pub_ = nh.advertise<visualization_msgs::Marker>(footprint_pub_topic, 10); 
-    global_goal_pub_ = nh.advertise<geometry_msgs::PoseStamped>(global_goal_pub_topic, 10); 
+    goal_pub_ = nh.advertise<geometry_msgs::PoseStamped>(goal_pub_topic, 10); 
 
     std::string odom_sub_topic, goal_sub_topic, cmd_sub_topic;
     nh_priv.param<std::string>("odom_sub_topic", odom_sub_topic, std::string("odom"));
@@ -120,10 +119,14 @@ namespace reactive_assistance
   ObstacleAvoidance::~ObstacleAvoidance()
   {
     if (robot_profile_ != NULL)
+    {
       delete robot_profile_;
+    }
 
     if (obs_map_ != NULL)
+    {
       delete obs_map_;
+    }
 
     if (control_thread_ != NULL)
     {
@@ -141,9 +144,9 @@ namespace reactive_assistance
     visualization_msgs::Marker line_list;
     line_list.type = visualization_msgs::Marker::LINE_LIST;
     line_list.header.stamp = ros::Time::now(); 
-    line_list.header.frame_id = world_frame_;
+    line_list.header.frame_id = odom_frame_;
     line_list.action = visualization_msgs::Marker::ADD;
-    line_list.pose = curr_odom_.pose.pose; // Match the robot frame
+    line_list.pose = curr_odom_.pose.pose;
     line_list.scale.x = 0.05;
 
     // Coloured green like the trajectory
@@ -164,10 +167,10 @@ namespace reactive_assistance
 
   void ObstacleAvoidance::goalCallback(const geometry_msgs::PoseStamped::ConstPtr& goal)
   { 
-    goal_pose_ = *goal;
+    curr_goal_ = *goal;
     available_goal_ = true;
 
-    global_goal_pub_.publish(goal_pose_);
+    goal_pub_.publish(curr_goal_);
     ROS_INFO("Goal pose updated!");
   }
   
@@ -179,9 +182,13 @@ namespace reactive_assistance
     TrajPtr goal_traj;
     // Get simulated goal trajectory if one hasn't been specified by a 'global' source
     if (available_goal_)
+    {
       goal_traj = getGlobalTrajectory();
+    }
     else
+    {
       goal_traj = simulateTrajectory(orig);
+    }
 
     // Assistive command
     geometry_msgs::Twist assist;
@@ -207,25 +214,18 @@ namespace reactive_assistance
       cloud->header.frame_id = robot_frame_;
 
       for (std::vector<Obstacle>::const_iterator it = obstacles.begin(); it != obstacles.end(); ++it)
+      {
         cloud->points.push_back(pcl::PointXYZ(it->point.x, it->point.y, 0.0));
+      }
 
       // Publish the colliding obstacles
       obs_pub_.publish(cloud);
 
       // Find the assistive command 
       findAssistiveCommand(*goal_traj, assist);
-
-      // Check if you can just run original commands
-      if (available_goal_ && almostEqual(assist.linear.x, 0.0) && almostEqual(assist.angular.z, 0.0))
-      {
-        std::vector<Obstacle> orig_obstacles;
-        TrajPtr sim_traj = simulateTrajectory(orig);
-        
-        if (obs_map_->isNavigable(*sim_traj, obs_map_->getObstacles(), orig_obstacles))
-          assist = orig;
-      }
       
-
+      ROS_INFO_STREAM("Original: Lin " << orig.linear.x << " Ang " << orig.angular.z);  
+      ROS_INFO_STREAM("Assisted: Lin " << assist.linear.x << " Ang " << assist.angular.z);
     }
       
     // Publish the safe navigational command
@@ -235,6 +235,7 @@ namespace reactive_assistance
   //==============================================================================
   // PRIVATE OBSTACLE AVOIDANCE METHODS (Utilities)
   //============================================================================== 
+
   // Compute motion commands to navigate a safe trajectory
   void ObstacleAvoidance::computeMotionCommand(const Trajectory& safe_traj, geometry_msgs::Twist& assist) const
   {
@@ -262,10 +263,7 @@ namespace reactive_assistance
       int close_idx;
       
       // If global plan is available then use Euclidean distance
-      if (available_goal_)
-        closest = obs_map_->findClosestGap(traj, gaps_check, true, close_idx);
-      else
-        closest = obs_map_->findClosestGap(traj, gaps_check, false, close_idx);
+      closest = obs_map_->findClosestGap(traj, gaps_check, available_goal_, close_idx);
 
       // If no best gap identified, break loop
       if (closest != NULL)
@@ -320,9 +318,13 @@ namespace reactive_assistance
           // Obstacles preventing navigability of the path to the weighted average goal
           std::vector<Obstacle> coll_obstacles;
           if (obs_map_->isNavigable(avg, obs_map_->getObstacles(), coll_obstacles))
+          {
             computeMotionCommand(avg, assist);
+          }
           else
+          {
             computeMotionCommand(last_sub, assist);
+          }
         }
         else
         {
@@ -343,7 +345,7 @@ namespace reactive_assistance
 
   TrajPtr ObstacleAvoidance::getGlobalTrajectory() const
   {
-    // Transform coordinates to local robot frame
+    // Transform global goal coordinates to robot frame
     geometry_msgs::TransformStamped transform;
     try
     {
@@ -360,20 +362,20 @@ namespace reactive_assistance
     }
 
     geometry_msgs::PoseStamped goal_robot;
-    tf2::doTransform(goal_pose_, goal_robot, transform);
+    tf2::doTransform(curr_goal_, goal_robot, transform);
 
     return TrajPtr(new Trajectory(goal_robot.pose.position));
   }
 
   TrajPtr ObstacleAvoidance::simulateTrajectory(const geometry_msgs::Twist& twist_msg) const
   {
-    // Transform coordinates to robot frame
+    // Transform local odom coordinates to robot frame
     geometry_msgs::TransformStamped transform;
     try
     {
         transform = tf_buffer_.lookupTransform(
                       robot_frame_,
-                      world_frame_,
+                      odom_frame_,
                       ros::Time(0),
                       ros::Duration(3.0));
     }
@@ -385,7 +387,7 @@ namespace reactive_assistance
 
     // Create trajectory as a pose array
     geometry_msgs::PoseArray traj_cloud;
-    traj_cloud.header.frame_id = world_frame_;
+    traj_cloud.header.frame_id = odom_frame_;
 
     // Current odometry info
     double x = curr_odom_.pose.pose.position.x;
@@ -393,8 +395,8 @@ namespace reactive_assistance
     
     double yaw, _pitch, _roll;
     tf2::Matrix3x3(tf2::Quaternion(curr_odom_.pose.pose.orientation.x, curr_odom_.pose.pose.orientation.y, 
-                                    curr_odom_.pose.pose.orientation.z, curr_odom_.pose.pose.orientation.w))
-                                    .getEulerYPR(yaw, _pitch, _roll);
+                                   curr_odom_.pose.pose.orientation.z, curr_odom_.pose.pose.orientation.w))
+                                   .getEulerYPR(yaw, _pitch, _roll);
     double th = yaw;
     
     double vx = curr_odom_.twist.twist.linear.x;
@@ -419,8 +421,8 @@ namespace reactive_assistance
       vth = (vth < vel_ang) ? std::min(vel_ang, vth + robot_profile_->acc_vth_lim * dt) : std::max(vel_ang, vth - robot_profile_->acc_vth_lim * dt); 
       
       // Compute updated position of robot given the new velocities
-      x += (vx * cos(th) * dt);
-      y += (vx * sin(th) * dt);
+      x += (vx * std::cos(th) * dt);
+      y += (vx * std::sin(th) * dt);
       th += (vth * dt);
 
       pose_stamped.pose.position.x = x;
@@ -436,9 +438,59 @@ namespace reactive_assistance
 
     // Publish trajectory of robot
     traj_pub_.publish(traj_cloud);
-    global_goal_pub_.publish(goal_stamped);
+
+    // If an invalid circular arc due to a purely rotational motion
+    if (almostEqual(goal_stamped.pose.position.y, 0.0) && almostEqual(goal_stamped.pose.position.x, 0.0))
+    {
+      double y_goal, _p_goal, _r_goal;
+      tf2::Matrix3x3(tf2::Quaternion(goal_stamped.pose.orientation.x, goal_stamped.pose.orientation.y, 
+                                     goal_stamped.pose.orientation.z, goal_stamped.pose.orientation.w))
+                                     .getEulerYPR(y_goal, _p_goal, _r_goal);
+
+
+      // Assume goal is at rotated edge of robot's virtual radius
+      goal_stamped.pose.position.x = robot_profile_->radius * std::cos(y_goal);
+      goal_stamped.pose.position.y = robot_profile_->radius * std::sin(y_goal);
+    }
+
+    // If invalid due to a straight trajectory, slightly offset the 'y'
+    if (almostEqual(goal_stamped.pose.position.y, 0.0))
+    {
+      goal_stamped.pose.position.y += epsilon;
+    }
+
+    // Publish simulated goal of robot trajectory
+    goal_pub_.publish(goal_stamped);
 
     return TrajPtr(new Trajectory(goal_stamped.pose.position));
+  }
+
+  bool ObstacleAvoidance::isGoalReached() const
+  {
+    // Transform global goal coordinates to odom frame
+    geometry_msgs::TransformStamped transform;
+    try
+    {
+        transform = tf_buffer_.lookupTransform(
+                      odom_frame_,
+                      world_frame_,
+                      ros::Time(0),
+                      ros::Duration(3.0));
+    }
+    catch (const tf2::TransformException& ex)
+    {
+        ROS_ERROR("Error during transform: %s", ex.what());
+        return false;
+    }
+
+    geometry_msgs::PoseStamped curr_goal_stamped;
+    curr_goal_stamped.pose = curr_goal_.pose;
+    curr_goal_stamped.header.frame_id = world_frame_;
+
+    geometry_msgs::PoseStamped goal_odom;
+    tf2::doTransform(curr_goal_stamped, goal_odom, transform);
+
+    return (dist(goal_odom.pose.position, curr_odom_.pose.pose.position) < robot_profile_->radius);
   }
 
   void ObstacleAvoidance::navigationLoop(double rate)
@@ -447,8 +499,8 @@ namespace reactive_assistance
     ros::Rate r(rate);
     while (nh.ok())
     {
-      // Check if a goal point is available and the position has not been reached yet
-      if (available_goal_ && (dist(goal_pose_.pose.position, curr_odom_.pose.pose.position) < robot_profile_->radius))
+      // Check if a goal point is available and whether the position has been reached yet
+      if (available_goal_ && isGoalReached())
       {
         ROS_INFO("Reached the published goal pose!");
         available_goal_ = false;
