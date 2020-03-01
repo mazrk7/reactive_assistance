@@ -1,10 +1,28 @@
 # Reactive Obstacle Avoidance
 
-Repository contains a ROS package that is an adapted implementation of a "gap-based" algorithm for reactive obstacle avoidance, originally introduced as [admissible gap navigation](https://www.sciencedirect.com/science/article/pii/S0921889017306905#!).
+Repository contains a ROS package that is an adapted implementation of a "gap-based" algorithm for reactive obstacle avoidance, originally introduced as [admissible gap navigation](https://www.sciencedirect.com/science/article/pii/S0921889017306905#!). 
 
 The package currently offers two use-cases for differential-drive rectangular mobile bases with full field-of-view 2D planar laser scan data:
 - **Shared Control:** Adjust the input command velocties of a mobile base into safe output commands that avoid colliding with obstacles and navigate towards "gaps" in the environment
 - **Autonomous:** Publish goal poses on the appropriate topic and the mobile base will autonomously navigate towards this goal
+
+## High-level Information
+
+In the `docs` folder of this repository, there is a presentation describing this method and other local motion planning techniques for planar mobile robots.
+
+The shared control method has also been applied for safe navigation in a research project involving a robotic wheelchair, which is presented in the following paper:
+
+```
+@inproceedings{Zolotas2019,
+    author = {Zolotas, M and Demiris, Y},
+    booktitle = {IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
+    pages = {3020--3026},
+    title = {{Towards Explainable Shared Control using Augmented Reality}},
+    year = {2019}
+}
+```
+
+## Implementation Details
 
 See an example of how to configure this package for use in the `example.launch` file.
 
