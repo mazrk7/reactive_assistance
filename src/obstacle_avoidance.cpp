@@ -545,6 +545,8 @@ namespace reactive_assistance
         ROS_INFO_STREAM("Autonomous: Lin " << assist.linear.x << " Ang " << assist.angular.z);
         auto_cmd_pub_.publish(assist);
       }
+
+      r.sleep();
     }
   }
 } /* namespace reactive_assistance */
