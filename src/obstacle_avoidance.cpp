@@ -18,8 +18,12 @@ namespace reactive_assistance
   // PUBLIC OBSTACLE AVOIDANCE METHODS
   //==============================================================================
 
-  ObstacleAvoidance::ObstacleAvoidance(tf2_ros::Buffer &tf)
-      : tf_buffer_(tf), robot_profile_(NULL), obs_map_(NULL), control_thread_(NULL), available_goal_(false)
+  ObstacleAvoidance::ObstacleAvoidance(tf2_ros::Buffer &tf) 
+                                      : tf_buffer_(tf)
+                                      , robot_profile_(NULL)
+                                      , obs_map_(NULL)
+                                      , control_thread_(NULL)
+                                      , available_goal_(false)
   {
     ros::NodeHandle nh;
     ros::NodeHandle nh_priv("~");
@@ -196,7 +200,7 @@ namespace reactive_assistance
     line_list.pose = curr_odom_.pose.pose;
     line_list.scale.x = 0.03;
 
-    // Coloured green 
+    // Coloured green
     line_list.color.g = 1.0;
     line_list.color.a = 1.0;
 
