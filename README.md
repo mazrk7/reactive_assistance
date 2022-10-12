@@ -36,12 +36,12 @@ This is a project regularly undergoing development and any contributions/feedbac
 
 You can also try out the TurtleBot3 configuration example by running the `turtlebot3_example.launch`. I followed [this blog](https://automaticaddison.com/how-to-launch-the-turtlebot3-simulation-with-ros/) to conduct the tests in simulation.
 
-First, launching the robot in Gazebo:
+First, launch the robot in Gazebo:
 ```shell
 roslaunch turtlebot3_gazebo turtlebot3_world.launch
 ```
 
-And then the obstacle avoidance method coupled with the teleoperation and robot description launches:
+And then run the obstacle avoidance method coupled with the teleoperation and robot description launches:
 ```shell
 roslaunch reactive_assistance turtlebot3_example.launch
 ```
