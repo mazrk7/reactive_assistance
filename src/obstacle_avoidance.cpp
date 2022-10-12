@@ -24,6 +24,7 @@ namespace reactive_assistance
                                       , obs_map_(NULL)
                                       , control_thread_(NULL)
                                       , available_goal_(false)
+                                      , last_valid_plan_(ros::Time::now())
   {
     ros::NodeHandle nh;
     ros::NodeHandle nh_priv("~");
@@ -134,6 +135,7 @@ namespace reactive_assistance
 
     double control_rate;
     nh_priv.param<double>("control_rate", control_rate, 10);
+    nh_priv.param<double>("planner_patience", planner_patience_, 15.0);
     // Set up the autonomous control thread
     control_thread_ = new boost::thread(boost::bind(&ObstacleAvoidance::navigationLoop, this, control_rate));
 
@@ -220,6 +222,7 @@ namespace reactive_assistance
   {
     curr_goal_ = *goal;
     available_goal_ = true;
+    last_valid_plan_ = ros::Time::now();
 
     goal_pub_.publish(curr_goal_);
     ROS_INFO("Goal pose updated!");
@@ -547,12 +550,14 @@ namespace reactive_assistance
   {
     ros::NodeHandle nh;
     ros::Rate r(rate);
+
     while (nh.ok())
     {
       // Check if a goal point is available and whether the position has been reached yet
       if (available_goal_ && isGoalReached())
       {
         ROS_INFO("Reached the published goal pose!");
+
         available_goal_ = false;
 
         // Publish a terminating velocity command
@@ -594,6 +599,19 @@ namespace reactive_assistance
         // Publish the autonomous navigation command if a goal is still available
         ROS_INFO_STREAM("Autonomous: Lin " << assist.linear.x << " Ang " << assist.angular.z);
         auto_cmd_pub_.publish(assist);
+
+        // Make sure to reset if planner times out on reaching goal
+        if (ros::Time::now() > last_valid_plan_ + ros::Duration(planner_patience_))
+        {
+          ROS_INFO("Time out on reaching the published goal pose!");
+
+          available_goal_ = false;
+
+          // Publish a terminating velocity command
+          geometry_msgs::Twist zero_twist;
+          zero_twist.linear.x = zero_twist.angular.z = 0.0;
+          auto_cmd_pub_.publish(zero_twist);
+        }
       }
 
       r.sleep();

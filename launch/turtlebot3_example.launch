@@ -1,6 +1,9 @@
 <launch>
     <arg name="base_frame_id" default="base_footprint" />
 
+    <!-- If wanting to use autonomous navigation -->
+    <arg name="autonomous" default="false" />
+
     <!-- Obstacle avoidance arguments -->
     <arg name="sim_time" default="0.8" />
     <arg name="dvel_safe" default="0.6" />
@@ -15,7 +18,7 @@
     <arg name="goal_topic" default="/move_base_simple/goal" />
 
     <!-- Obstacle avoidance for safe navigation either autonomously or in a blended input manner -->
-    <node pkg="reactive_assistance" type="reactive_assistance_node" name="reactive_assistance_node">
+    <node pkg="reactive_assistance" type="reactive_assistance_node" name="reactive_assistance_node" required="true" output="screen">
         <!-- Actually half-length/width values -->
         <param name="footprint_length" value="0.1" />
         <param name="footprint_width" value="0.1" />
@@ -54,7 +57,7 @@
     </node>
 
     <!-- turtlebot3_teleop_key already has its own built in velocity smoother -->
-    <node pkg="turtlebot3_teleop" type="turtlebot3_teleop_key" name="turtlebot3_teleop_keyboard" output="screen">
+    <node pkg="turtlebot3_teleop" type="turtlebot3_teleop_key" name="turtlebot3_teleop_keyboard" unless="$(arg autonomous)" output="screen">
         <remap from="cmd_vel" to="$(arg in_vel_topic)" />
     </node>
 

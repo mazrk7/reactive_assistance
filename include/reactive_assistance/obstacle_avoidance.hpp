@@ -46,7 +46,9 @@ namespace reactive_assistance
       bool isGoalReached() const;
       // Navigate towards a global goal
       void navigationLoop(double rate);
-
+      // Local planner patience during navigation loop
+      double planner_patience_;
+      
       tf2_ros::Buffer &tf_buffer_;
 
       // Robot footprint and kinematic constraints
@@ -73,7 +75,8 @@ namespace reactive_assistance
       // Global goal pose and flag to confirm availability
       bool available_goal_;
       geometry_msgs::PoseStamped curr_goal_;
-
+      ros::Time last_valid_plan_;
+      
       // Publishers & subscribers
       ros::Publisher safe_cmd_pub_;
       ros::Publisher auto_cmd_pub_;
