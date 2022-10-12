@@ -1,6 +1,6 @@
 <launch>
   <node pkg="reactive_assistance" type="reactive_assistance_node" name="reactive_assistance_node" required="true" output="screen">
-    <!-- Length and width of rectangular mobile base -->
+    <!-- Length and width (halved) of rectangular mobile base -->
     <param name="footprint_length" value="0.45"/>
     <param name="footprint_width" value="0.35"/>
 
