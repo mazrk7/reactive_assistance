@@ -10,7 +10,7 @@
 // All the other necessary headers included in the class declaration files
 #include <reactive_assistance/obstacle_map.hpp>
 
-namespace reactive_assistance 
+namespace reactive_assistance
 {
   //==============================================================================
   // PUBLIC OBSTACLE MAP METHODS
@@ -18,7 +18,7 @@ namespace reactive_assistance
 
   ObstacleMap::ObstacleMap(tf2_ros::Buffer& tf, const RobotProfile& rp) 
                           : tf_buffer_(tf)
-                          , robot_profile_(rp)        
+                          , robot_profile_(rp)
   {
     ros::NodeHandle nh;
     ros::NodeHandle nh_priv("~");
@@ -35,22 +35,22 @@ namespace reactive_assistance
     nh_priv.param<std::string>("virt_gaps_pub_topic", virt_gaps_pub_topic, std::string("virt_gaps"));
     nh_priv.param<std::string>("closest_gap_pub_topic", closest_gap_pub_topic, std::string("closest_gap"));
 
-    gaps_pub_ = nh.advertise<PointCloud>(gaps_pub_topic, 10); 
-    virt_gaps_pub_ = nh.advertise<PointCloud>(virt_gaps_pub_topic, 10); 
-    closest_gap_pub_ = nh.advertise<PointCloud>(closest_gap_pub_topic, 10); 
+    gaps_pub_ = nh.advertise<PointCloud>(gaps_pub_topic, 10);
+    virt_gaps_pub_ = nh.advertise<PointCloud>(virt_gaps_pub_topic, 10);
+    closest_gap_pub_ = nh.advertise<PointCloud>(closest_gap_pub_topic, 10);
   }
 
-  void ObstacleMap::scanCallback(const sensor_msgs::LaserScan::ConstPtr& scan)
-  { 
+  void ObstacleMap::scanCallback(const sensor_msgs::LaserScan::ConstPtr &scan)
+  {
     boost::mutex::scoped_lock lock(scan_mutex_);
     scan_ = *scan;
 
     updateObstacles();
     updateGaps();
   }
-  
+
   // Return the closest gap from in_gaps according to either the angular or Euclidean distance
-  GapPtr ObstacleMap::findClosestGap(const Trajectory& traj, const std::vector<Gap>& in_gaps, bool euclid, int& idx) const
+  GapPtr ObstacleMap::findClosestGap(const Trajectory &traj, const std::vector<Gap> &in_gaps, bool euclid, int &idx) const
   {
     unsigned int gaps_size = in_gaps.size();
 
@@ -62,7 +62,7 @@ namespace reactive_assistance
     double min_dist = std::numeric_limits<double>::max();
     int closest_ind = -1;
     bool close_right = false;
-    for (unsigned int i = 0; i < gaps_size; i++) 
+    for (unsigned int i = 0; i < gaps_size; i++)
     {
       // Right and left side distances of gap
       double dist_rs, dist_ls;
@@ -78,7 +78,7 @@ namespace reactive_assistance
       }
 
       if (dist_rs < min_dist || dist_ls < min_dist)
-      {  
+      {
         closest_ind = i;
 
         if (dist_rs > dist_ls)
@@ -103,27 +103,27 @@ namespace reactive_assistance
     }
 
     // Initialise point cloud to visualise the candidate closest gaps
-    PointCloudPtr point_cloud (new PointCloud);
+    PointCloudPtr point_cloud(new PointCloud);
     point_cloud->header.frame_id = robot_frame_;
-    
+
     point_cloud->points.push_back(pcl::PointXYZ(in_gaps[closest_ind].right.point.x, in_gaps[closest_ind].right.point.y, in_gaps[closest_ind].right.point.z));
     point_cloud->points.push_back(pcl::PointXYZ(in_gaps[closest_ind].left.point.x, in_gaps[closest_ind].left.point.y, in_gaps[closest_ind].left.point.z));
-    
+
     closest_gap_pub_.publish(point_cloud);
-    
+
     return GapPtr(new Gap(in_gaps[closest_ind].right, in_gaps[closest_ind].left, close_right));
   }
 
   // Find whether an input 'gap' is admissible or not, and return the vectors of "virtual" gaps and their clearances
-  void ObstacleMap::findVirtualGaps(const Gap& gap, std::vector<GapPtr>& virt_gaps, std::vector<double>& clearances) const
-  {   
+  void ObstacleMap::findVirtualGaps(const Gap &gap, std::vector<GapPtr> &virt_gaps, std::vector<double> &clearances) const
+  {
     // Looping check variable
     bool valid_gap_found = false;
     // Initialise with input gap
     virt_gaps.push_back(GapPtr(new Gap(gap)));
 
     // Initialise point cloud to visualise the virtual gaps
-    PointCloudPtr point_cloud (new PointCloud);
+    PointCloudPtr point_cloud(new PointCloud);
     point_cloud->header.frame_id = robot_frame_;
 
     do
@@ -137,7 +137,7 @@ namespace reactive_assistance
       std::vector<Obstacle> o_in, o_ex;
       int i = 0;
       // Compute interior and exterior obstacle points
-      for (std::vector<Obstacle>::const_iterator it = obstacles_.begin(); it != obstacles_.end(); ++it) 
+      for (std::vector<Obstacle>::const_iterator it = obstacles_.begin(); it != obstacles_.end(); ++it)
       {
         if (!almostEqual(it->distance, scan_.range_max))
         {
@@ -156,7 +156,7 @@ namespace reactive_assistance
 
       // Erase every exterior obstacle point that yields an angular distance of more than PI
       std::vector<Obstacle> o_ex_apo;
-      for (std::vector<Obstacle>::const_iterator it = o_ex.begin(); it != o_ex.end(); ++it) 
+      for (std::vector<Obstacle>::const_iterator it = o_ex.begin(); it != o_ex.end(); ++it)
       {
         if ((proj(it->angle - virt->right.angle) > 0.0) || (proj(it->angle - virt->left.angle) < 0.0))
         {
@@ -193,7 +193,7 @@ namespace reactive_assistance
         int close_ind = -1;
 
         // Find first side of the virtual gap as colliding obstacle point closest to trajectory to gap
-        for (unsigned int i = 0; i < coll_size; i++) 
+        for (unsigned int i = 0; i < coll_size; i++)
         {
           // Closest obstacle point along trajectory to sub goal of gap
           geometry_msgs::Point p;
@@ -241,7 +241,7 @@ namespace reactive_assistance
           o_ex_tild.push_back(virt->left);
 
           gamma = trans_fangle - trans_rangle;
-          for (unsigned int i = 0; i < o_ex_tild.size(); ++i) 
+          for (unsigned int i = 0; i < o_ex_tild.size(); ++i)
           {
             geometry_msgs::Point trans_p = o_ex_tild[i].point;
             transformPoint(org, mid_angle, trans_p);
@@ -273,7 +273,7 @@ namespace reactive_assistance
           o_ex_tild.push_back(virt->right);
 
           gamma = trans_langle - trans_fangle;
-          for (unsigned int i = 0; i < o_ex_tild.size(); ++i) 
+          for (unsigned int i = 0; i < o_ex_tild.size(); ++i)
           {
             geometry_msgs::Point trans_p = o_ex_tild[i].point;
             transformPoint(org, mid_angle, trans_p);
@@ -299,16 +299,16 @@ namespace reactive_assistance
           }
         }
       }
-    } while(!valid_gap_found);
-    
+    } while (!valid_gap_found);
+
     virt_gaps_pub_.publish(point_cloud);
   }
 
   // Compute sub-goal associated with the input gap
-  void ObstacleMap::findSubGoal(const Gap& gap, geometry_msgs::Point& sub_goal) const
+  void ObstacleMap::findSubGoal(const Gap &gap, geometry_msgs::Point &sub_goal) const
   {
     double ds;
-    if (gap.width > (2*(robot_profile_.radius + robot_profile_.d_safe)))
+    if (gap.width > (2 * (robot_profile_.radius + robot_profile_.d_safe)))
     {
       ds = robot_profile_.radius + robot_profile_.d_safe;
     }
@@ -359,17 +359,17 @@ namespace reactive_assistance
       // Angle to arc fixed
       double th = 0.25 * M_PI;
 
-      pt1.x = rad_c*std::sin(th);
-      pt2.x = rad_c*std::sin(-th);
-      pt1.y = pt2.y = -rad_c*(1-std::cos(th));
+      pt1.x = rad_c * std::sin(th);
+      pt2.x = rad_c * std::sin(-th);
+      pt1.y = pt2.y = -rad_c * (1 - std::cos(th));
 
       r1 = r2 = rad_c;
     }
-    else 
+    else
     {
-      double circle_eq = pc.x*pc.x + pc.y*pc.y - ds*ds;
-      r1 = circle_eq / (2*(pc.y + ds));
-      r2 = circle_eq / (2*(pc.y - ds));
+      double circle_eq = pc.x * pc.x + pc.y * pc.y - ds * ds;
+      r1 = circle_eq / (2 * (pc.y + ds));
+      r2 = circle_eq / (2 * (pc.y - ds));
 
       if (almostEqual(pc.y, -ds))
       {
@@ -381,11 +381,11 @@ namespace reactive_assistance
         double mag1 = std::hypot(pc.x, pc.y - r1);
         double mag2 = std::hypot(pc.x, pc.y - r2);
 
-        pt1.x = (pc.x/mag1) * std::abs(r1);
-        pt1.y = r1 + ((pc.y - r1)/mag1)*std::abs(r1);
+        pt1.x = (pc.x / mag1) * std::abs(r1);
+        pt1.y = r1 + ((pc.y - r1) / mag1) * std::abs(r1);
 
-        pt2.x = (pc.x/mag2) * std::abs(r2);
-        pt2.y = r2 + ((pc.y - r2)/mag2)*std::abs(r2);      
+        pt2.x = (pc.x / mag2) * std::abs(r2);
+        pt2.y = r2 + ((pc.y - r2) / mag2) * std::abs(r2);
       }
     }
 
@@ -408,8 +408,8 @@ namespace reactive_assistance
   }
 
   // Check for safety in navigating a trajectory around a provided list of 'obstacles' and return the list of colliding obstacles
-  bool ObstacleMap::isNavigable(const Trajectory& traj, const std::vector<Obstacle>& obstacles, std::vector<Obstacle>& coll_obstacles) const
-  {     
+  bool ObstacleMap::isNavigable(const Trajectory &traj, const std::vector<Obstacle> &obstacles, std::vector<Obstacle> &coll_obstacles) const
+  {
     // Origin of circle at (0, r)
     geometry_msgs::Point c;
     c.x = c.z = 0.0;
@@ -422,19 +422,19 @@ namespace reactive_assistance
 
     // Transformation matrix to goal point orientation
     double Ra, Rb, Rc, Rd;
-    Ra = Rd = (goal.x*goal.x - goal.y*goal.y)/(goal.x*goal.x + goal.y*goal.y);
-    Rb = -(2*goal.x*goal.y)/(goal.x*goal.x + goal.y*goal.y);
+    Ra = Rd = (goal.x * goal.x - goal.y * goal.y) / (goal.x * goal.x + goal.y * goal.y);
+    Rb = -(2 * goal.x * goal.y) / (goal.x * goal.x + goal.y * goal.y);
     Rc = -Rb;
 
     int footprint_length = robot_profile_.footprint.size();
 
     // Loop over each edge of robot polygon shape
-    for (int i = 0; i < footprint_length; ++i) 
+    for (int i = 0; i < footprint_length; ++i)
     {
       // Loop over obstacles to find colliding ones
-      for (std::vector<Obstacle>::const_iterator it = obstacles.begin(); it != obstacles.end(); ++it) 
+      for (std::vector<Obstacle>::const_iterator it = obstacles.begin(); it != obstacles.end(); ++it)
       {
-        int next = (i+1) % footprint_length;
+        int next = (i + 1) % footprint_length;
 
         // Potential intersection pe and the shifted point pe_star with gap goal reached
         geometry_msgs::Point pe, pe_star;
@@ -451,7 +451,7 @@ namespace reactive_assistance
             pe_star.x = pe.x + goal.x;
             pe_star.y = pe.y + goal.y;
 
-            if ((sgnx*pe.x <= sgnx*it->point.x) && (sgnx*it->point.x <= sgnx*pe_star.x))
+            if ((sgnx * pe.x <= sgnx * it->point.x) && (sgnx * it->point.x <= sgnx * pe_star.x))
             {
               coll_obstacles.push_back(*it);
             }
@@ -459,8 +459,8 @@ namespace reactive_assistance
         }
         else if (circleIntersect(robot_profile_.footprint[i], robot_profile_.footprint[next], c, dist(c, it->point), pe))
         {
-          pe_star.x = (Ra*pe.x + Rb*pe.y) + goal.x;
-          pe_star.y = (Rc*pe.x + Rd*pe.y) + goal.y;
+          pe_star.x = (Ra * pe.x + Rb * pe.y) + goal.x;
+          pe_star.y = (Rc * pe.x + Rd * pe.y) + goal.y;
 
           // Frame F for intersecting edge point
           double th = std::atan2(pe.y - traj.getRadius(), pe.x);
@@ -470,20 +470,20 @@ namespace reactive_assistance
           geometry_msgs::Point trans_pe = pe_star;
           transformPoint(c, th, trans_pe);
 
-          if (mod2pi(delta*std::atan2(trans_obs.y, trans_obs.x)) <= mod2pi(delta*std::atan2(trans_pe.y, trans_pe.x)))
+          if (mod2pi(delta * std::atan2(trans_obs.y, trans_obs.x)) <= mod2pi(delta * std::atan2(trans_pe.y, trans_pe.x)))
           {
             coll_obstacles.push_back(*it);
           }
         }
       }
     }
-    
+
     return (coll_obstacles.size() <= 0);
   }
 
   //==============================================================================
   // PRIVATE OBSTACLE MAP METHODS (Utilities)
-  //============================================================================== 
+  //==============================================================================
 
   void ObstacleMap::updateObstacles()
   {
@@ -491,15 +491,15 @@ namespace reactive_assistance
     geometry_msgs::TransformStamped transform;
     try
     {
-        transform = tf_buffer_.lookupTransform(
-                      robot_frame_,
-                      scan_.header.frame_id,
-                      ros::Time(0),
-                      ros::Duration(3.0));
+      transform = tf_buffer_.lookupTransform(
+          robot_frame_,
+          scan_.header.frame_id,
+          ros::Time(0),
+          ros::Duration(3.0));
     }
-    catch (const tf2::TransformException& ex)
+    catch (const tf2::TransformException &ex)
     {
-        ROS_ERROR("Error during transform: %s", ex.what());
+      ROS_ERROR("Error during transform: %s", ex.what());
     }
 
     std::vector<Obstacle> obstacles;
@@ -508,16 +508,16 @@ namespace reactive_assistance
     // Populate the obstacles vector from scanner readings
     for (unsigned int i = 0; i < obs_size; ++i)
     {
-      const double& range = scan_.ranges[i];
-      double angle = scan_.angle_min + i*scan_.angle_increment;
-        
+      const double &range = scan_.ranges[i];
+      double angle = scan_.angle_min + i * scan_.angle_increment;
+
       geometry_msgs::PointStamped base_point;
       geometry_msgs::PointStamped scan_point;
-      
-      scan_point.point.x = range*std::cos(angle);
-      scan_point.point.y = range*std::sin(angle);
+
+      scan_point.point.x = range * std::cos(angle);
+      scan_point.point.y = range * std::sin(angle);
       scan_point.point.z = 0.0;
-      
+
       // Transform scan point to base point
       tf2::doTransform(scan_point, base_point, transform);
       if (!std::isinf(range))
@@ -528,7 +528,7 @@ namespace reactive_assistance
       {
         obstacles.push_back(Obstacle(base_point.point, angle, scan_.range_max));
       }
-      
+
       // Track closest obstacle distance
       if (range < min_obs_dist_)
       {
@@ -539,106 +539,105 @@ namespace reactive_assistance
     // Overwrite obstacles vector property
     obstacles_ = obstacles;
   }
-  
-  void ObstacleMap::gapSearch(const Obstacle& obs, int n, bool right, std::vector<Gap>& gaps, int& next_ind) const
+
+  void ObstacleMap::gapSearch(const Obstacle &obs, int n, bool right, std::vector<Gap> &gaps, int &next_ind) const
   {
-      // Wrap around effect for checking next index
-      int next = (right) ? ((next_ind+1) % n) : ((n + (next_ind-1)) % n);
+    // Wrap around effect for checking next index
+    int next = (right) ? ((next_ind + 1) % n) : ((n + (next_ind - 1)) % n);
 
-      // Depth discontinuity detected when two contiguous depth measurements are either
-      // separated by the min width (bilateral: basis on endpoint closer to robot) OR
-      // either measurement is a non-obstacle point (unilateral: basis at unique endpoint)
-      if (((dist(obstacles_[next].point, obs.point) > robot_profile_.min_gap_width) && (obs.distance < obstacles_[next].distance))
-          || (!almostEqual(obs.distance, scan_.range_max) && almostEqual(obstacles_[next].distance, scan_.range_max)))
-      {  
-        // Initialise min variables
-        double min_visi, min_dist;
-        min_visi = min_dist = std::numeric_limits<double>::max();
-        int min_ind = -1;
+    // Depth discontinuity detected when two contiguous depth measurements are either
+    // separated by the min width (bilateral: basis on endpoint closer to robot) OR
+    // either measurement is a non-obstacle point (unilateral: basis at unique endpoint)
+    if (((dist(obstacles_[next].point, obs.point) > robot_profile_.min_gap_width) && (obs.distance < obstacles_[next].distance)) || (!almostEqual(obs.distance, scan_.range_max) && almostEqual(obstacles_[next].distance, scan_.range_max)))
+    {
+      // Initialise min variables
+      double min_visi, min_dist;
+      min_visi = min_dist = std::numeric_limits<double>::max();
+      int min_ind = -1;
 
-        // Fixed squared distance to gap start point
-        double dist_gap = obs.distance * obs.distance;
-               
-        // Evaluate OTHER side of gap by searching obstacle points falling to the opposite of the found gap side
-        int i = next;
-        // O+ points are those in which the angular distance does not exceed PI
-        bool ang_safe = (right) ? (proj(obstacles_[i].angle - obs.angle) > 0.0) : (proj(obstacles_[i].angle - obs.angle) < 0.0);
-        while (ang_safe)
+      // Fixed squared distance to gap start point
+      double dist_gap = obs.distance * obs.distance;
+
+      // Evaluate OTHER side of gap by searching obstacle points falling to the opposite of the found gap side
+      int i = next;
+      // O+ points are those in which the angular distance does not exceed PI
+      bool ang_safe = (right) ? (proj(obstacles_[i].angle - obs.angle) > 0.0) : (proj(obstacles_[i].angle - obs.angle) < 0.0);
+      while (ang_safe)
+      {
+        if (!almostEqual(obstacles_[i].distance, scan_.range_max))
         {
-          if (!almostEqual(obstacles_[i].distance, scan_.range_max))
+          // Determine whether these O+ points are valid or not
+          double distp = dist(obs.point, obstacles_[i].point);
+          double visibility = std::acos((dist_gap + distp * distp - obstacles_[i].distance * obstacles_[i].distance) / (2 * distp * obs.distance));
+
+          // Valid O+ point if visibility condition met
+          if (visibility < min_visi)
           {
-            // Determine whether these O+ points are valid or not
-            double distp = dist(obs.point, obstacles_[i].point);
-            double visibility = std::acos((dist_gap + distp*distp - obstacles_[i].distance*obstacles_[i].distance) / (2*distp*obs.distance));
-            
-            // Valid O+ point if visibility condition met
-            if (visibility < min_visi)
+            min_visi = visibility;
+
+            // Find closest point from the valid ones
+            if (distp < min_dist)
             {
-              min_visi = visibility;
-              
-              // Find closest point from the valid ones
-              if (distp < min_dist)
-              {
-                min_dist = distp;
-                min_ind = i;
-              }
+              min_dist = distp;
+              min_ind = i;
             }
           }
-          
-          // Next point to evaluate and angular safety check
-          i = (right) ? ((i+1) % n) : ((n + (i-1)) % n);
-          ang_safe = (right) ? (proj(obstacles_[i].angle - obs.angle) > 0.0) : (proj(obstacles_[i].angle - obs.angle) < 0.0);
         }
 
-        // If there is an empty set of valid O+ points
-        if (min_ind == -1)
+        // Next point to evaluate and angular safety check
+        i = (right) ? ((i + 1) % n) : ((n + (i - 1)) % n);
+        ang_safe = (right) ? (proj(obstacles_[i].angle - obs.angle) > 0.0) : (proj(obstacles_[i].angle - obs.angle) < 0.0);
+      }
+
+      // If there is an empty set of valid O+ points
+      if (min_ind == -1)
+      {
+        // Left side is a point at a distance R+d_safe and angle of left neighbourhood
+        geometry_msgs::Point virtual_point;
+        double virt_safe = robot_profile_.radius + robot_profile_.d_safe;
+        virtual_point.x = obs.point.x + virt_safe * std::cos(obstacles_[next].angle);
+        virtual_point.y = obs.point.y + virt_safe * std::sin(obstacles_[next].angle);
+        virtual_point.z = 0.0;
+
+        // Law of cosines for distance to virtual point
+        double range = std::sqrt(virt_safe * virt_safe + dist_gap - 2 * virt_safe * obs.distance * std::cos(obstacles_[next].angle - obs.angle));
+
+        if (right)
         {
-          // Left side is a point at a distance R+d_safe and angle of left neighbourhood
-          geometry_msgs::Point virtual_point;
-          double virt_safe = robot_profile_.radius+robot_profile_.d_safe;
-          virtual_point.x = obs.point.x + virt_safe*std::cos(obstacles_[next].angle);
-          virtual_point.y = obs.point.y + virt_safe*std::sin(obstacles_[next].angle);
-          virtual_point.z = 0.0;
-
-          // Law of cosines for distance to virtual point
-          double range = std::sqrt(virt_safe*virt_safe + dist_gap - 2*virt_safe*obs.distance*std::cos(obstacles_[next].angle - obs.angle));
-
-          if (right)
-          {
-            gaps.push_back(Gap(obs, Obstacle(virtual_point, obstacles_[next].angle, range))); 
-          }
-          else
-          {
-            gaps.push_back(Gap(Obstacle(virtual_point, obstacles_[next].angle, range), obs)); 
-          }
-
-          // Resume scanning from left neighbour
-          next_ind = next;
-        }
-        else if (right)
-        {
-          // Add gap to the vector with the basis right side and determined left side
-          gaps.push_back(Gap(obs, obstacles_[min_ind])); 
-          // Resume scanning from left side, unless it exceeds last sensor point
-          next_ind = (min_ind < next_ind) ? 0 : min_ind;
+          gaps.push_back(Gap(obs, Obstacle(virtual_point, obstacles_[next].angle, range)));
         }
         else
         {
-          // Add gap to the vector with the basis right side and determined left side
-          gaps.push_back(Gap(obstacles_[min_ind], obs)); 
-          // Resume scanning from right side, unless it exceeds last sensor point
-          next_ind = (min_ind > next_ind) ? (n-1) : min_ind;
+          gaps.push_back(Gap(Obstacle(virtual_point, obstacles_[next].angle, range), obs));
         }
+
+        // Resume scanning from left neighbour
+        next_ind = next;
+      }
+      else if (right)
+      {
+        // Add gap to the vector with the basis right side and determined left side
+        gaps.push_back(Gap(obs, obstacles_[min_ind]));
+        // Resume scanning from left side, unless it exceeds last sensor point
+        next_ind = (min_ind < next_ind) ? 0 : min_ind;
       }
       else
       {
-        next_ind = next;
+        // Add gap to the vector with the basis right side and determined left side
+        gaps.push_back(Gap(obstacles_[min_ind], obs));
+        // Resume scanning from right side, unless it exceeds last sensor point
+        next_ind = (min_ind > next_ind) ? (n - 1) : min_ind;
       }
+    }
+    else
+    {
+      next_ind = next;
+    }
   }
 
   // Admissible Gap method of evaluating each range reading to detect gaps (treating each scan as a sector)
   void ObstacleMap::updateGaps()
-  { 
+  {
     std::vector<Gap> gaps;
     int n = obstacles_.size();
 
@@ -647,14 +646,14 @@ namespace reactive_assistance
     do
     {
       gapSearch(obstacles_[k], n, true, gaps, k);
-    } while(k != 0);
-    
+    } while (k != 0);
+
     // Clockwise search is to check for the existence of LEFT discontinuities
-    k = n-1;
+    k = n - 1;
     do
     {
       gapSearch(obstacles_[k], n, false, gaps, k);
-    } while(k != (n-1));
+    } while (k != (n - 1));
 
     // Filter the gaps detected
     std::vector<Gap> filt_gaps;
@@ -663,20 +662,20 @@ namespace reactive_assistance
     // Overwrite gaps property
     gaps_ = filt_gaps;
   }
-  
+
   // Filter out gaps to eliminate duplicates and gaps that do not exceed the required width
-  void ObstacleMap::filterGaps(const std::vector<Gap>& in_gaps, std::vector<Gap>& out_gaps) const
+  void ObstacleMap::filterGaps(const std::vector<Gap> &in_gaps, std::vector<Gap> &out_gaps) const
   {
     std::vector<Gap> filt_gaps;
 
     // Initialise point cloud to visualise the gaps
-    PointCloudPtr point_cloud (new PointCloud);
+    PointCloudPtr point_cloud(new PointCloud);
     point_cloud->header.frame_id = robot_frame_;
-    
+
     unsigned int gaps_size = in_gaps.size();
     // Evaluate each gap to determine whether to eliminate it if it exists within another gap
     for (unsigned int i = 0; i < gaps_size; ++i)
-    {     
+    {
       bool redundant_gap = false;
       unsigned int j = 0;
 
@@ -684,12 +683,8 @@ namespace reactive_assistance
       if (in_gaps[i].front)
       {
         while (!redundant_gap && j < gaps_size)
-        {  
-          redundant_gap = in_gaps[j].front && (
-              (i != j) 
-              && (in_gaps[i].right.angle >= in_gaps[j].right.angle) 
-              && (in_gaps[i].left.angle <= in_gaps[j].left.angle)
-            );
+        {
+          redundant_gap = in_gaps[j].front && ((i != j) && (in_gaps[i].right.angle >= in_gaps[j].right.angle) && (in_gaps[i].left.angle <= in_gaps[j].left.angle));
 
           j++;
         }
@@ -697,23 +692,19 @@ namespace reactive_assistance
       else
       {
         while (!redundant_gap && j < gaps_size)
-        {    
-          redundant_gap = !in_gaps[j].front && (
-              (i != j) 
-              && (proj(in_gaps[i].right.angle-M_PI) >= proj(in_gaps[j].right.angle-M_PI)) 
-              && (proj(in_gaps[i].left.angle-M_PI) <= proj(in_gaps[j].left.angle-M_PI))
-            );
+        {
+          redundant_gap = !in_gaps[j].front && ((i != j) && (proj(in_gaps[i].right.angle - M_PI) >= proj(in_gaps[j].right.angle - M_PI)) && (proj(in_gaps[i].left.angle - M_PI) <= proj(in_gaps[j].left.angle - M_PI)));
 
           j++;
         }
       }
 
-      if (!redundant_gap) 
+      if (!redundant_gap)
       {
-        filt_gaps.push_back(in_gaps[i]);      
+        filt_gaps.push_back(in_gaps[i]);
       }
     }
-    
+
     gaps_size = filt_gaps.size();
     // Make sure filtered gaps fulfil the minimum width requirement
     for (unsigned int i = 0; i < gaps_size; ++i)
@@ -726,7 +717,7 @@ namespace reactive_assistance
         point_cloud->points.push_back(pcl::PointXYZ(out_gaps[i].left.point.x, out_gaps[i].left.point.y, out_gaps[i].left.point.z));
       }
     }
-    
+
     if (out_gaps.size() > 0)
     {
       gaps_pub_.publish(point_cloud);
@@ -734,12 +725,12 @@ namespace reactive_assistance
   }
 
   // Compute clearance to obstacles while traversing a gap via an input trajectory
-  double ObstacleMap::computeClearance(const Trajectory& traj) const
-  {     
+  double ObstacleMap::computeClearance(const Trajectory &traj) const
+  {
     unsigned int obs_size = obstacles_.size();
     double min_d = std::numeric_limits<double>::max();
 
-    for (unsigned int i = 0; i < obs_size; i++) 
+    for (unsigned int i = 0; i < obs_size; i++)
     {
       geometry_msgs::Point p;
 

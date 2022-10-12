@@ -27,8 +27,21 @@ The shared control method has also been applied for safe navigation in a researc
 See an example of how to configure this package for use in the `example.launch` file.
 
 Some additional constraints/considerations before using this package:
-- It only operates on rectangular mobile bases, other geometric robot shapes have not yet been handled
 - No tests have been made in the gap detection routines for laser scans _without_ a full field-of-view
 - It's assumed that the laser data has been filtered already to _not_ contain range values within the robot's footprint
 
 This is a project regularly undergoing development and any contributions/feedback will be well-received. There is also a presentation in the `docs` directory for higher-level understanding of how this package operates.
+
+### TurtleBot3 Configuration
+
+You can also try out the TurtleBot3 configuration example by running the `turtlebot3_example.launch`. I followed [this blog](https://automaticaddison.com/how-to-launch-the-turtlebot3-simulation-with-ros/) to conduct the tests in simulation.
+
+First, launching the robot in Gazebo:
+```shell
+roslaunch turtlebot3_gazebo turtlebot3_world.launch
+```
+
+And then the obstacle avoidance method coupled with the teleoperation and robot description launches:
+```shell
+roslaunch reactive_assistance turtlebot3_example.launch
+```

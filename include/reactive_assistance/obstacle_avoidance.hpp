@@ -26,33 +26,33 @@ namespace reactive_assistance
   {
     public:
       // Constructor & destructor
-      ObstacleAvoidance(tf2_ros::Buffer& tf);
+      ObstacleAvoidance(tf2_ros::Buffer &tf);
       ~ObstacleAvoidance();
 
-      void odomCallback(const nav_msgs::Odometry::ConstPtr& odom);
-      void goalCallback(const geometry_msgs::PoseStamped::ConstPtr& goal);
-      void cmdCallback(const geometry_msgs::Twist::ConstPtr& twist);  
+      void odomCallback(const nav_msgs::Odometry::ConstPtr &odom);
+      void goalCallback(const geometry_msgs::PoseStamped::ConstPtr &goal);
+      void cmdCallback(const geometry_msgs::Twist::ConstPtr &twist);
 
     private:
       // Compute motion command to navigate a safe trajectory
-      void computeMotionCommand(const Trajectory& safe_traj, geometry_msgs::Twist& assist) const;
+      void computeMotionCommand(const Trajectory &safe_traj, geometry_msgs::Twist &assist) const;
       // Find assistive command for the simulated trajectory 'traj'
-      void findAssistiveCommand(const Trajectory& traj, geometry_msgs::Twist& assist) const;
+      void findAssistiveCommand(const Trajectory &traj, geometry_msgs::Twist &assist) const;
       // Return goal point specified by a 'global' planner
-      TrajPtr getGlobalTrajectory() const; 
+      TrajPtr getGlobalTrajectory() const;
       // Return goal point of simulated trajectory
-      TrajPtr simulateTrajectory(const geometry_msgs::Twist& twist_msg) const; 
+      TrajPtr simulateTrajectory(const geometry_msgs::Twist &twist_msg) const;
       // Checks to see if the robot has reached the global goal yet
       bool isGoalReached() const;
       // Navigate towards a global goal
       void navigationLoop(double rate);
 
-      tf2_ros::Buffer& tf_buffer_;
+      tf2_ros::Buffer &tf_buffer_;
 
       // Robot footprint and kinematic constraints
-      RobotProfile* robot_profile_;
+      RobotProfile *robot_profile_;
       // Obstacle map where gaps are computed and navigation functions are performed
-      ObstacleMap* obs_map_;
+      ObstacleMap *obs_map_;
 
       // TF frames
       std::string robot_frame_;
@@ -64,7 +64,7 @@ namespace reactive_assistance
       double sim_granularity_;
 
       // Obstacle avoidance  control loop thread
-      boost::thread* control_thread_;
+      boost::thread *control_thread_;
 
       // Odom and mutex objects
       boost::mutex odom_mutex_;

@@ -23,7 +23,7 @@ namespace reactive_assistance
          , close_right(cr) 
       {}
       ~Gap() {}
-      
+
       // Composed of a right and left obstacle
       Obstacle right;
       Obstacle left;
@@ -38,9 +38,9 @@ namespace reactive_assistance
 
     private:
       inline bool isFront() const { return (std::abs(left.angle - right.angle) <= M_PI); }
-      
+
       inline geometry_msgs::Point computeMid() const
-      { 
+      {
         geometry_msgs::Point p;
 
         p.x = (right.point.x + left.point.x) / 2.0;

@@ -22,7 +22,7 @@ namespace reactive_assistance
                   , max_vth(vth)
                   , acc_vx_lim(acc_x)
                   , acc_vth_lim(acc_th)
-      {}  
+      {}
       ~RobotProfile() {}
 
       // Shape of robot approximated by a polygon
@@ -36,7 +36,7 @@ namespace reactive_assistance
 
       // How much the speed is limited near obstacles, m
       double dvel_safe;
-      
+
       // Minimum width of an opening that the robot can fit through
       double min_gap_width;
 

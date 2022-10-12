@@ -9,12 +9,12 @@
 #include <reactive_assistance/gap.hpp>
 #include <reactive_assistance/trajectory.hpp>
 
-namespace reactive_assistance 
+namespace reactive_assistance
 {
   typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
-  typedef PointCloud::Ptr PointCloudPtr; 
+  typedef PointCloud::Ptr PointCloudPtr;
   typedef boost::shared_ptr<Gap> GapPtr;
   typedef boost::shared_ptr<Trajectory> TrajPtr;
 } /* namespace reactive_assistance */
-     
+
 #endif

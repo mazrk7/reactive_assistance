@@ -1,25 +1,25 @@
 <launch>
   <node pkg="reactive_assistance" type="reactive_assistance_node" name="reactive_assistance_node" required="true" output="screen">
-    <!-- Length and width of rectangular mobile base -->
-    <param name="footprint_length" value="0.45"/>
-    <param name="footprint_width" value="0.35"/>
+    <!-- Length and width (halved) of rectangular mobile base -->
+    <param name="footprint_length" value="0.45" />
+    <param name="footprint_width" value="0.35" />
 
     <!-- Robot's kinematics -->
-    <param name="max_lin_vel" value="0.5"/>
-    <param name="max_ang_vel" value="1.0"/>
+    <param name="max_lin_vel" value="0.5" />
+    <param name="max_ang_vel" value="1.0" />
 
     <!-- Forward simulation time of trajectory for shared control -->
-    <param name="sim_time" value="1.0"/>
+    <param name="sim_time" value="1.0" />
 
     <!-- Parameter used in the admissible gap method -->
-    <param name="dvel_safe" value="0.9"/>
+    <param name="dvel_safe" value="0.9" />
 
     <!-- Output command velocities can also be configured -->
-    <param name="cmd_sub_topic" value="main_js_cmd_vel"/>
-    <param name="goal_sub_topic" value="move_base_simple/goal"/> 
+    <param name="cmd_sub_topic" value="main_js_cmd_vel" />
+    <param name="goal_sub_topic" value="move_base_simple/goal" />
 
-    <remap from="base_scan" to="base_scan"/>
-    <remap from="auto_vel" to="cmd_vel"/>
-    <remap from="odom" to="odom"/>
-  </node>  
+    <remap from="base_scan" to="base_scan" />
+    <remap from="auto_vel" to="cmd_vel" />
+    <remap from="odom" to="odom" />
+  </node>
 </launch>

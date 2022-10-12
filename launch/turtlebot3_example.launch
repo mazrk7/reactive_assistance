@@ -1,0 +1,62 @@
+<launch>
+    <arg name="base_frame_id" default="base_footprint" />
+
+    <!-- Obstacle avoidance arguments -->
+    <arg name="sim_time" default="0.8" />
+    <arg name="dvel_safe" default="0.6" />
+
+    <!-- Topic names -->
+    <arg name="in_vel_topic" default="/cmd_vel_in" />
+    <arg name="out_vel_topic" default="cmd_vel" />
+
+    <arg name="scan_topic" default="/scan" />
+    <arg name="odom_topic" default="/odom" />
+
+    <arg name="goal_topic" default="/move_base_simple/goal" />
+
+    <!-- Obstacle avoidance for safe navigation either autonomously or in a blended input manner -->
+    <node pkg="reactive_assistance" type="reactive_assistance_node" name="reactive_assistance_node">
+        <!-- Actually half-length/width values -->
+        <param name="footprint_length" value="0.1" />
+        <param name="footprint_width" value="0.1" />
+        <!-- <param name="radius" value="0.1"/> -->
+
+        <param name="max_lin_vel" value="0.8" />
+        <param name="max_ang_vel" value="1.0" />
+
+        <param name="sim_time" value="$(arg sim_time)" />
+        <param name="dvel_safe" value="$(arg dvel_safe)" />
+
+        <param name="base_frame" value="$(arg base_frame_id)" />
+        <param name="world_frame" value="odom" />
+
+        <!-- Subscriber topics -->
+        <param name="laser_sub_topic" value="$(arg scan_topic)" />
+        <param name="odom_sub_topic" value="$(arg odom_topic)" />
+        <param name="cmd_sub_topic" value="$(arg in_vel_topic)" />
+        <param name="goal_sub_topic" value="$(arg goal_topic)" />
+
+        <!-- Publisher topics -->
+        <param name="safe_cmd_pub_topic" value="$(arg out_vel_topic)" />
+        <param name="auto_cmd_pub_topic" value="$(arg out_vel_topic)" />
+    </node>
+
+    <!-- TurtleBot3 ROS launches (bringup & teleop) -->
+    <arg name="model" default="$(env TURTLEBOT3_MODEL)" doc="model type [burger, waffle, waffle_pi]" />
+    <param name="model" value="$(arg model)" />
+
+    <include file="$(find turtlebot3_bringup)/launch/includes/description.launch.xml">
+        <arg name="model" value="$(arg model)" />
+    </include>
+
+    <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher">
+        <param name="publish_frequency" type="double" value="50.0" />
+    </node>
+
+    <!-- turtlebot3_teleop_key already has its own built in velocity smoother -->
+    <node pkg="turtlebot3_teleop" type="turtlebot3_teleop_key" name="turtlebot3_teleop_keyboard" output="screen">
+        <remap from="cmd_vel" to="$(arg in_vel_topic)" />
+    </node>
+
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find reactive_assistance)/rviz/turtlebot3.rviz" />
+</launch>
